@@ -1,3 +1,8 @@
-class1
-class2
-class3
+hinged_door
+cavity_door
+bifold_door
+sliding_door
+frame_segment
+frame_opening
+external_frame_opening
+internal_frame_opening
