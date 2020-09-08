@@ -4,6 +4,7 @@ import os
 import sys
 import glob
 from pathlib import Path
+import tkinter as tk
 from tkinter import Tk, filedialog, Frame, Label, Entry, Button, Canvas, StringVar, OptionMenu
 from tkinter import messagebox as tkMessageBox
 from tkinter import Listbox, LEFT, RIGHT, TOP, END, BOTH, N, E, W, S, NW
@@ -11,35 +12,23 @@ from PIL import Image as PImage, ImageTk
 
 TK_SILENCE_DEPRECATION = 1
 
-MAIN_COLOURS = ['darkseagreen', 'darkorange',
-                'darkturquoise', 'darkgreen',
-                'darkviolet', 'darkgray', 'darkmagenta',
-                'darkblue', 'darkkhaki', 'darkcyan', 'darkred',
-                'darksalmon', 'darkgoldenrod',
-                'darkgrey', 'darkslateblue', 'darkorchid',
-                'skyblue', 'yellow', 'orange', 'red', 'pink',
-                'violet', 'green', 'brown', 'gold', 'Olive',
-                'Maroon', 'blue', 'cyan', 'black', 'olivedrab',
-                'lightcyan', 'silver']
+COLOURS = ['darkseagreen', 'darkorange',
+           'darkturquoise', 'darkgreen',
+           'darkviolet', 'darkgray', 'darkmagenta',
+           'darkblue', 'darkkhaki', 'darkcyan', 'darkred',
+           'darksalmon', 'darkgoldenrod',
+           'darkgrey', 'darkslateblue', 'darkorchid',
+           'skyblue', 'yellow', 'orange', 'red', 'pink',
+           'violet', 'green', 'brown', 'gold', 'Olive',
+           'Maroon', 'blue', 'cyan', 'black', 'olivedrab',
+           'lightcyan', 'silver']
 
 SIZE = 256, 256
 
 SUPPORTED_IMAGE_TYPES = ('*.jpg', '*.png')
 IMAGES_ROOT = Path("./Images").resolve()
 IMAGES_ROOT.mkdir(parents=True, exist_ok=True)
-
 CLASSES_FILENAME = 'classes.txt'
-CLASSES = []
-
-try:
-    with open(CLASSES_FILENAME, 'r') as cls:
-        CLASSES = cls.readlines()
-    CLASSES = [cls.strip() for cls in CLASSES]
-except IOError as error:
-    print("[ERROR] Please create {0} and put your all classes".format(CLASSES_FILENAME))
-    sys.exit(1)
-assert len(CLASSES) <= len(MAIN_COLOURS)
-COLOURS = MAIN_COLOURS[:len(CLASSES)]
 
 
 def tl_br_bbox_to_yolo_bbox(tl_br_bbox):
@@ -93,6 +82,7 @@ class LabelTool():
         self.labelfilename = ''
         self.tkimg = None
         self.img = None
+        self.classes = []
 
         # initialise mouse state
         self.STATE = {}
@@ -132,8 +122,7 @@ class LabelTool():
         # showing bbox info & delete bbox
         self.tkvar = StringVar(self.parent)
         self.cur_cls_id = 0
-        self.tkvar.set(CLASSES[0])  # set the default option
-        self.popupMenu = OptionMenu(self.frame, self.tkvar, *CLASSES, command=self.change_dropdown)
+        self.popupMenu = OptionMenu(self.frame, self.tkvar, "None")
         self.popupMenu.grid(row=1, column=2, sticky=E+S)
         self.chooselbl = Label(self.frame, text='Choose Class:')
         self.chooselbl.grid(row=1, column=2, sticky=W+S)
@@ -194,6 +183,34 @@ class LabelTool():
             self.entry.insert(0, str(subdir_path.relative_to(IMAGES_ROOT)))
             self.load_dir()
 
+    def load_classes(self):
+        """Load dataset specific classes, if do not exist fallback to defaults"""
+        try:
+            print(IMAGES_ROOT)
+            print(self.category)
+            print(CLASSES_FILENAME)
+            classes_fullpath = os.path.join(IMAGES_ROOT, self.category, CLASSES_FILENAME)
+            if os.path.exists(classes_fullpath):
+                print("Loading dataset specific classes file {0}".format(classes_fullpath))
+            else:
+                print("No dataset classes file {0}, loading default".format(classes_fullpath))
+                classes_fullpath = CLASSES_FILENAME
+
+            with open(classes_fullpath, 'r') as cls:
+                classes = cls.readlines()
+            self.classes = [cls.strip() for cls in classes]
+
+            menu = self.popupMenu["menu"]
+            menu.delete(0, "end")
+            for cls in self.classes:
+                menu.add_command(label=cls, command=lambda v=cls: self.change_dropdown(v))
+            self.tkvar.set(self.classes[0])
+
+        except IOError:
+            print("[ERROR] Please create {0} and put your all classes".format(classes_fullpath))
+            sys.exit(1)
+        assert len(self.classes) <= len(COLOURS)
+
     def load_dir(self, dbg=False):
         """Load annotation dataset in selected sub directory"""
         if not dbg:
@@ -220,6 +237,8 @@ class LabelTool():
         # default to the 1st image in the collection
         self.cur = 1
         self.total = len(self.imageList)
+
+        self.load_classes()
 
         # set up output dir
         if not os.path.exists('./Labels'):
@@ -267,7 +286,7 @@ class LabelTool():
                     self.listbox.insert(END, '(%.2f, %.2f) -> (%.2f, %.2f) -> (%s)' %
                                         (tl_br_bbox[0], tl_br_bbox[1],
                                          tl_br_bbox[2], tl_br_bbox[3],
-                                         CLASSES[int(yolo_data[0])]))
+                                         self.classes[int(yolo_data[0])]))
                     self.listbox.itemconfig(len(self.bboxIdList) - 1, fg=COLOURS[int(yolo_data[0])])
 
     def resize_image(self, event):
@@ -311,7 +330,7 @@ class LabelTool():
                 self.bboxIdList.append(self.bboxId)
                 self.bboxId = None
                 self.listbox.insert(END, '(%.2f, %.2f) -> (%.2f, %.2f) -> (%s)' %
-                                    (tl_x, tl_y, br_x, br_y, CLASSES[self.cur_cls_id]))
+                                    (tl_x, tl_y, br_x, br_y, self.classes[self.cur_cls_id]))
                 self.listbox.itemconfig(len(self.bboxIdList) - 1, fg=COLOURS[self.cur_cls_id])
             self.STATE['click'] = 1 - self.STATE['click']
 
@@ -392,10 +411,10 @@ class LabelTool():
             self.cur = idx
             self.load_image()
 
-    def change_dropdown(self, *args):
+    def change_dropdown(self, cls):
         """Update currently selected annotation class from dropdown selection"""
-        cur_cls = self.tkvar.get()
-        self.cur_cls_id = CLASSES.index(cur_cls)
+        self.tkvar.set(cls)
+        self.cur_cls_id = self.classes.index(cls)
 
 
 if __name__ == '__main__':
