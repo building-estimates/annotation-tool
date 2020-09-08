@@ -45,7 +45,7 @@ def yolo_bbox_to_tl_br_bbox(yolo_bbox):
     tl_x = yolo_bbox[0] - yolo_bbox[2]/2
     tl_y = yolo_bbox[1] - yolo_bbox[3]/2
     br_x = tl_x + yolo_bbox[2]
-    br_y = tl_x + yolo_bbox[3]
+    br_y = tl_y + yolo_bbox[3]
     return (tl_x, tl_y, br_x, br_y)
 
 
@@ -60,8 +60,6 @@ class LabelTool():
 
     def __init__(self, master):
         # set up the main frame
-        self.curimg_h = 0
-        self.curimg_w = 0
         self.cur_cls_id = -1
         self.parent = master
         self.parent.title("Yolo Annotation Tool")
@@ -112,7 +110,7 @@ class LabelTool():
         self.mainPanel = Canvas(self.frame, cursor='tcross')
         self.mainPanel.bind("<Button-1>", self.mouse_click)
         self.mainPanel.bind("<Motion>", self.mouse_move)
-        self.mainPanel.bind("<Configure>", self.resize_image)
+        self.mainPanel.bind("<Configure>", self.resize_image_event)
         self.parent.bind("<Escape>", self.cancel_bbox)  # press <Espace> to cancel current bbox
         self.parent.bind("s", self.cancel_bbox)
         self.parent.bind("<Left>", self.previous_image)  # press 'a' to go backforward
@@ -254,13 +252,14 @@ class LabelTool():
         # load image
         imagepath = self.imageList[self.cur - 1]
         self.img = PImage.open(imagepath)
-        self.curimg_w, self.curimg_h = self.img.size
         self.tkimg = ImageTk.PhotoImage(self.img)
-        #self.tkimg = self.tkimg._PhotoImage__photo.zoom(2)
         self.mainPanel.config(width=max(self.tkimg.width(), 400),
                               height=max(self.tkimg.height(), 400))
         self.mainPanel.create_image(0, 0, image=self.tkimg, anchor=NW, tags="IMG")
         self.progLabel.config(text="%04d/%04d" % (self.cur, self.total))
+
+        self.mainPanel.update()
+        self.resize_image(self.mainPanel.winfo_width(), self.mainPanel.winfo_height())
 
         # load labels
         self.clear_all_bbox()
@@ -289,10 +288,10 @@ class LabelTool():
                                          self.classes[int(yolo_data[0])]))
                     self.listbox.itemconfig(len(self.bboxIdList) - 1, fg=COLOURS[int(yolo_data[0])])
 
-    def resize_image(self, event):
+    def resize_image(self, width, height):
         """Resize the current image to fit the canvas"""
         if self.tkimg:
-            size = (event.width, event.height)
+            size = (width, height)
             resized = self.img.resize(size, PImage.ANTIALIAS)
             self.tkimg = ImageTk.PhotoImage(resized)
             self.mainPanel.delete("IMG")
@@ -306,6 +305,10 @@ class LabelTool():
                                                         width=2,
                                                         outline=COLOURS[int(bboxcls)])
                 self.bboxIdList.append(tmpId)
+
+    def resize_image_event(self, event):
+        """Resize the current image to fit the canvas"""
+        self.resize_image(event.width, event.height)
 
     def save_image_labels(self):
         """Save labels for current image to disk"""
